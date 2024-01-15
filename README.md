@@ -21,3 +21,11 @@ Options:
 ```
 
 Copyright 2024, FifthTry, Inc, All Rights Reserved.
+
+## Installation
+
+```sh
+source <(curl -fsSL https://www.fifthtry.com/clift.sh)
+```
+
+Supported Platforms: Linux, Mac
