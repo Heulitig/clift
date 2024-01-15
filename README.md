@@ -9,6 +9,7 @@ $ clift --help
 Usage: clift [OPTIONS] [COMMAND]
 
 Commands:
+  login    Authenticate with FifthTry
   clone    Clone a fastn package from FifthTry (or CR)
   upload   Upload local package to FifthTry
   tunnel   Expose a local fastn instance via FifthTry
