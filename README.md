@@ -19,3 +19,5 @@ Options:
   -h, --help               Print help
   -V, --version            Print version
 ```
+
+Copyright 2024, FifthTry, Inc, All Rights Reserved.
