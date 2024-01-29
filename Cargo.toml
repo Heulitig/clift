@@ -6,3 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+fastn-observer = { git = "https://github.com/fastn-stack/fastn-observer", rev = "47b29ea" }
+tokio = { version = "1", features = ["full"] }
+thiserror = "1"
+clap = "4"
