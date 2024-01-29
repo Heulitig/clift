@@ -10,3 +10,4 @@ fastn-observer = { git = "https://github.com/fastn-stack/fastn-observer", rev = 
 tokio = { version = "1", features = ["full"] }
 thiserror = "1"
 clap = "4"
+rusty-hook = "0.11"
