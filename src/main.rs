@@ -37,7 +37,7 @@ fn app(version: &'static str) -> clap::Command {
 
 async fn clift_commands(matches: &clap::ArgMatches) -> clift::Result<()> {
     if matches.subcommand_matches("upload").is_some() {
-        return clift::commands::upload().await;
+        return Ok(clift::commands::upload().await?);
     }
 
     Ok(())
@@ -56,4 +56,4 @@ pub fn version() -> &'static str {
     }
 }
 
-pub(crate) const API_FIFTHTRY_COM: &str = "http://127.0.0.0:8001";
+pub(crate) const API_FIFTHTRY_COM: &str = "http://127.0.0.1:8001";
