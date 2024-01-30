@@ -3,7 +3,6 @@ mod commands;
 mod error;
 pub use error::{Error, Result};
 
-
 fn main() {
     fastn_observer::observe();
 
@@ -14,16 +13,12 @@ fn main() {
         .block_on(outer_main())
 }
 
-
 async fn outer_main() {
     if let Err(e) = async_main().await {
         eprintln!("{:?}", e);
         std::process::exit(1);
     }
 }
-
-
-
 
 async fn async_main() -> clift::Result<()> {
     let matches = app(version()).get_matches();
@@ -33,18 +28,12 @@ async fn async_main() -> clift::Result<()> {
     Ok(())
 }
 
-
-
 fn app(version: &'static str) -> clap::Command {
     clap::Command::new("clift: fastn Package on ft")
         .version(version)
         .arg_required_else_help(true)
-        .subcommand(
-            clap::Command::new("upload")
-                .about("Uploads fastn package on ft")
-        )
+        .subcommand(clap::Command::new("upload").about("Uploads fastn package on ft"))
 }
-
 
 async fn clift_commands(matches: &clap::ArgMatches) -> clift::Result<()> {
     if matches.subcommand_matches("upload").is_some() {
@@ -53,9 +42,6 @@ async fn clift_commands(matches: &clap::ArgMatches) -> clift::Result<()> {
 
     Ok(())
 }
-
-
-
 
 pub fn version() -> &'static str {
     if std::env::args().any(|e| e == "--test") {
