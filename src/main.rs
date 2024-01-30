@@ -1,3 +1,9 @@
+extern crate self as clift;
+mod commands;
+mod error;
+pub use error::{Error, Result};
+
+
 fn main() {
     fastn_observer::observe();
 
@@ -17,13 +23,9 @@ async fn outer_main() {
 }
 
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("CliftError")]
-    CliftError,
-}
 
-async fn async_main() -> Result<(), Error> {
+
+async fn async_main() -> clift::Result<()> {
     let matches = app(version()).get_matches();
 
     clift_commands(&matches).await?;
@@ -44,8 +46,12 @@ fn app(version: &'static str) -> clap::Command {
 }
 
 
-async fn clift_commands(_matches: &clap::ArgMatches) -> Result<(), Error> {
-    todo!()
+async fn clift_commands(matches: &clap::ArgMatches) -> clift::Result<()> {
+    if matches.subcommand_matches("upload").is_some() {
+        return clift::commands::upload().await;
+    }
+
+    Ok(())
 }
 
 
