@@ -55,3 +55,5 @@ pub fn version() -> &'static str {
         }
     }
 }
+
+pub(crate) const API_FIFTHTRY_COM: &str = "http://127.0.0.0:8001";

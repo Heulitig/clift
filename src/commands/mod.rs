@@ -1,3 +1,5 @@
 mod upload;
 
-pub use upload::upload;
+pub(crate) use upload::upload;
+
+pub use upload::UploadError;
