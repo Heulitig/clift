@@ -1,8 +1,5 @@
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("CliftError")]
-    CliftError,
-
     #[error("UploadError: {}", _0)]
     UploadError(#[from] clift::commands::UploadError),
 
