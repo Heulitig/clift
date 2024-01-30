@@ -4,21 +4,15 @@ struct File {
     content: Vec<u8>,
 }
 
-pub(crate) async fn upload() -> UploadResult<()> {
+pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     let current_dir = std::env::current_dir()?;
-    let site = get_site(&current_dir).await?;
-
-    let uploaded_files = {
-        let all_files_url = reqwest::Url::parse_with_params(
-            format!("{}/api/all-files/", clift::API_FIFTHTRY_COM).as_str(),
-            &[("site", site)],
-        )?;
-        let response = reqwest::get(all_files_url).await?;
-        let files: Vec<File> = response.json().await?;
-        files
+    let site = match site {
+        Some(site) => site.clone(),
+        None => get_site(&current_dir).await?,
     };
 
-    let local_files = get_local_files(&current_dir).await?;
+    let _uploaded_files = get_uploaded_files(site.as_str()).await?;
+    let _local_files = get_local_files(&current_dir).await?;
 
     Ok(())
 }
@@ -46,12 +40,32 @@ async fn get_site(current_dir: &std::path::PathBuf) -> UploadResult<String> {
     package_name.ok_or(UploadError::PackageNotFound)
 }
 
-async fn get_local_files(current_dir: &std::path::PathBuf) -> UploadResult<Vec<File>> {
+async fn get_uploaded_files(
+    site: &str,
+) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
+    let all_files_url =
+        reqwest::Url::parse_with_params(all_files_api().as_str(), &[("site", site)])?;
+    let response = reqwest::get(all_files_url).await?;
+    if response.status().is_client_error() {
+        return Err(UploadError::APIError {
+            message: response.text().await?,
+        });
+    }
+    let files: Vec<File> = response.json().await?;
+    Ok(files
+        .into_iter()
+        .map(|file| (file.file_name, file.content))
+        .collect::<std::collections::HashMap<String, Vec<u8>>>())
+}
+
+async fn get_local_files(
+    current_dir: &std::path::PathBuf,
+) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
     use tokio::io::AsyncReadExt;
 
     let ignore_path = ignore::WalkBuilder::new(current_dir);
 
-    let mut files = vec![];
+    let mut files: std::collections::HashMap<String, Vec<u8>> = Default::default();
     for path in ignore_path.build().flatten() {
         if path.path().is_dir() {
             continue;
@@ -69,13 +83,14 @@ async fn get_local_files(current_dir: &std::path::PathBuf) -> UploadResult<Vec<F
             .trim_start_matches('/')
             .to_string();
 
-        files.push(File {
-            file_name: path_without_package_dir,
-            content,
-        })
+        files.insert(path_without_package_dir, content);
     }
 
     Ok(files)
+}
+
+fn all_files_api() -> String {
+    format!("{}/api/all-files/", clift::API_FIFTHTRY_COM)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -86,8 +101,10 @@ pub enum UploadError {
     IOError(#[from] std::io::Error),
     #[error("UploadError: {}", _0)]
     ReqwestError(#[from] reqwest::Error),
-    #[error("URLParseError: {}", _0)]
+    #[error("UploadError: URLParseError: {}", _0)]
     UrlParseError(#[from] url::ParseError),
+    #[error("UploadError: APIError: {message}")]
+    APIError { message: String },
 }
 
 type UploadResult<T> = std::result::Result<T, UploadError>;

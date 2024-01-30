@@ -32,12 +32,17 @@ fn app(version: &'static str) -> clap::Command {
     clap::Command::new("clift: fastn Package on ft")
         .version(version)
         .arg_required_else_help(true)
-        .subcommand(clap::Command::new("upload").about("Uploads fastn package on ft"))
+        .subcommand(
+            clap::Command::new("upload")
+                .about("Uploads fastn package on ft")
+                .arg(clap::arg!(site: <SITE> "The site of the package to upload. Default value is taken from FASTN.ftd").required(false)),
+        )
 }
 
 async fn clift_commands(matches: &clap::ArgMatches) -> clift::Result<()> {
-    if matches.subcommand_matches("upload").is_some() {
-        return Ok(clift::commands::upload().await?);
+    if let Some(upload) = matches.subcommand_matches("upload") {
+        let site = upload.get_one::<String>("site");
+        return Ok(clift::commands::upload(site).await?);
     }
 
     Ok(())
