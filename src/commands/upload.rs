@@ -11,8 +11,10 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
         None => get_site(&current_dir).await?,
     };
 
-    let _uploaded_files = get_uploaded_files(site.as_str()).await?;
-    let _local_files = get_local_files(&current_dir).await?;
+    let uploaded_files = get_uploaded_files(site.as_str()).await?;
+    let local_files = get_local_files(&current_dir).await?;
+
+    let _files = compare_files(&uploaded_files, &local_files);
 
     Ok(())
 }
@@ -87,6 +89,39 @@ async fn get_local_files(
     }
 
     Ok(files)
+}
+
+fn compare_files(
+    uploaded_files: &std::collections::HashMap<String, Vec<u8>>,
+    local_files: &std::collections::HashMap<String, Vec<u8>>,
+) -> std::collections::HashMap<String, Vec<u8>> {
+    let mut files_to_be_uploaded: std::collections::HashMap<String, Vec<u8>> = Default::default();
+
+    // Get added or updated files
+    for (file_name, content) in local_files {
+        if let Some(uploaded_file) = uploaded_files.get(file_name) {
+            if content.eq(uploaded_file) {
+                continue;
+            }
+        }
+        files_to_be_uploaded.insert(file_name.clone(), content.clone());
+    }
+
+    // Get deleted files
+    let mut deleted_files = vec![];
+    for file_name in uploaded_files.keys() {
+        if !local_files.contains_key(file_name) {
+            deleted_files.push(file_name.clone());
+        }
+    }
+    if !deleted_files.is_empty() {
+        files_to_be_uploaded.insert(
+            "deleted".to_string(),
+            serde_json::to_vec(&deleted_files).unwrap(),
+        );
+    }
+
+    files_to_be_uploaded
 }
 
 fn all_files_api() -> String {
