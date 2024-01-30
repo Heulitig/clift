@@ -17,7 +17,7 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     Ok(())
 }
 
-async fn get_site(current_dir: &std::path::PathBuf) -> UploadResult<String> {
+async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
     use tokio::io::AsyncReadExt;
 
     let mut file = tokio::fs::File::open(current_dir.join("FASTN.ftd")).await?;
@@ -59,7 +59,7 @@ async fn get_uploaded_files(
 }
 
 async fn get_local_files(
-    current_dir: &std::path::PathBuf,
+    current_dir: &std::path::Path,
 ) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
     use tokio::io::AsyncReadExt;
 
