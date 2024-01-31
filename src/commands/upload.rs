@@ -14,9 +14,12 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     let uploaded_files = get_uploaded_files(site.as_str()).await?;
     let local_files = get_local_files(&current_dir).await?;
 
-    let form_data = compare_files(&uploaded_files, &local_files);
+    let (found_changes, form_data) = compare_files(&uploaded_files, &local_files);
 
-    calling_upload(form_data, site.as_str()).await
+    if found_changes {
+        return calling_upload(form_data, site.as_str()).await;
+    }
+    Ok(())
 }
 
 async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
@@ -45,6 +48,11 @@ async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
 async fn get_uploaded_files(
     site: &str,
 ) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
+    #[derive(serde::Deserialize)]
+    struct SuccessResponse {
+        data: Vec<File>,
+    }
+
     let all_files_url =
         reqwest::Url::parse_with_params(all_files_api().as_str(), &[("site", site)])?;
     let all_files_url_str = all_files_url.as_str().to_string();
@@ -55,8 +63,10 @@ async fn get_uploaded_files(
             message: response.text().await?,
         });
     }
-    let files: Vec<File> = response.json().await?;
+    let files: SuccessResponse = response.json().await?;
+
     Ok(files
+        .data
         .into_iter()
         .map(|file| (file.file_name, file.content))
         .collect::<std::collections::HashMap<String, Vec<u8>>>())
@@ -96,8 +106,9 @@ async fn get_local_files(
 fn compare_files(
     uploaded_files: &std::collections::HashMap<String, Vec<u8>>,
     local_files: &std::collections::HashMap<String, Vec<u8>>,
-) -> reqwest::multipart::Form {
+) -> (bool, reqwest::multipart::Form) {
     let mut files_to_be_uploaded = reqwest::multipart::Form::new();
+    let mut found_changes = false;
 
     // Get added or updated files
     for (file_name, content) in local_files {
@@ -111,6 +122,7 @@ fn compare_files(
             file_name.clone(),
             reqwest::multipart::Part::bytes(content.to_vec()).file_name(file_name.clone()),
         );
+        found_changes = true;
     }
 
     // Get deleted files
@@ -127,9 +139,10 @@ fn compare_files(
             reqwest::multipart::Part::bytes(serde_json::to_vec(&deleted_files).unwrap())
                 .file_name("deleted"),
         );
+        found_changes = true;
     }
 
-    files_to_be_uploaded
+    (found_changes, files_to_be_uploaded)
 }
 
 async fn calling_upload(form_data: reqwest::multipart::Form, site: &str) -> UploadResult<()> {
