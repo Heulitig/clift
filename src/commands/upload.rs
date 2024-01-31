@@ -49,7 +49,7 @@ async fn get_uploaded_files(
         reqwest::Url::parse_with_params(all_files_api().as_str(), &[("site", site)])?;
     let all_files_url_str = all_files_url.as_str().to_string();
     let response = reqwest::get(all_files_url).await?;
-    if response.status().is_client_error() {
+    if !response.status().is_success() {
         return Err(UploadError::APIError {
             url: all_files_url_str,
             message: response.text().await?,
@@ -140,7 +140,7 @@ async fn calling_upload(form_data: reqwest::multipart::Form, site: &str) -> Uplo
 
     // Make the POST request with form data
     let response = client.post(upload_url).multipart(form_data).send().await?;
-    if response.status().is_client_error() {
+    if !response.status().is_success() {
         return Err(UploadError::APIError {
             url: upload_url_str,
             message: response.text().await?,
