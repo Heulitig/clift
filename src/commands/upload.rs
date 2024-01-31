@@ -131,6 +131,7 @@ fn compare_files(
         if !local_files.contains_key(file_name) {
             println!("Deleting... {}", file_name);
             deleted_files.push(file_name.clone());
+            found_changes = true;
         }
     }
     if !deleted_files.is_empty() {
