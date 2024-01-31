@@ -16,7 +16,7 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
 
     let form_data = compare_files(&uploaded_files, &local_files);
 
-    calling_upload(form_data)
+    calling_upload(form_data, site.as_str()).await
 }
 
 async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
@@ -106,6 +106,7 @@ fn compare_files(
                 continue;
             }
         }
+        println!("Uploading... {}", file_name);
         files_to_be_uploaded = files_to_be_uploaded.part(
             file_name.clone(),
             reqwest::multipart::Part::bytes(content.to_vec()).file_name(file_name.clone()),
@@ -116,6 +117,7 @@ fn compare_files(
     let mut deleted_files = vec![];
     for file_name in uploaded_files.keys() {
         if !local_files.contains_key(file_name) {
+            println!("Deleting... {}", file_name);
             deleted_files.push(file_name.clone());
         }
     }
@@ -130,7 +132,7 @@ fn compare_files(
     files_to_be_uploaded
 }
 
-async fn calling_upload(form_data: reqwest::multipart::Form) -> UploadResult<()> {
+async fn calling_upload(form_data: reqwest::multipart::Form, site: &str) -> UploadResult<()> {
     // Create a reqwest client
     let client = reqwest::Client::new();
     let upload_url = reqwest::Url::parse_with_params(upload_api().as_str(), &[("site", site)])?;
@@ -145,6 +147,7 @@ async fn calling_upload(form_data: reqwest::multipart::Form) -> UploadResult<()>
         });
     }
 
+    println!("Done");
     Ok(())
 }
 
