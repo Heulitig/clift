@@ -6,18 +6,21 @@ struct File {
 
 pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     let current_dir = std::env::current_dir()?;
+
     let site = match site {
         Some(site) => site.clone(),
         None => get_site(&current_dir).await?,
     };
 
-    let uploaded_files = get_uploaded_files(site.as_str()).await?;
+    let github_action_id_token_request = github_action_id_token_request();
+
+    let uploaded_files = get_uploaded_files(site.as_str(), &github_action_id_token_request).await?;
     let local_files = get_local_files(&current_dir).await?;
 
     let (found_changes, form_data) = compare_files(&uploaded_files, &local_files);
 
     if found_changes {
-        return calling_upload(form_data, site.as_str()).await;
+        return calling_upload(form_data, site.as_str(), &github_action_id_token_request).await;
     }
     Ok(())
 }
@@ -45,7 +48,10 @@ async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
     package_name.ok_or(UploadError::PackageNotFound)
 }
 
-async fn get_uploaded_files(site: &str) -> UploadResult<std::collections::HashMap<String, String>> {
+async fn get_uploaded_files(
+    site: &str,
+    github_action_id_token_request: &Option<GithubActionIdTokenRequest>,
+) -> UploadResult<std::collections::HashMap<String, String>> {
     #[derive(serde::Deserialize)]
     struct SuccessResponse {
         data: Vec<File>,
@@ -54,7 +60,13 @@ async fn get_uploaded_files(site: &str) -> UploadResult<std::collections::HashMa
     let all_files_url =
         reqwest::Url::parse_with_params(all_files_api().as_str(), &[("site", site)])?;
     let all_files_url_str = all_files_url.as_str().to_string();
-    let response = reqwest::get(all_files_url).await?;
+
+    let response = calling_apis(
+        reqwest::Client::new().get(all_files_url),
+        github_action_id_token_request,
+    )
+    .await?;
+
     if !response.status().is_success() {
         return Err(UploadError::APIError {
             url: all_files_url_str,
@@ -134,6 +146,7 @@ fn compare_files(
             deleted_files.push(file_name.clone());
         }
     }
+
     if !deleted_files.is_empty() {
         files_to_be_uploaded = files_to_be_uploaded.part(
             "deleted",
@@ -146,14 +159,20 @@ fn compare_files(
     (found_changes, files_to_be_uploaded)
 }
 
-async fn calling_upload(form_data: reqwest::multipart::Form, site: &str) -> UploadResult<()> {
-    // Create a reqwest client
+async fn calling_upload(
+    form_data: reqwest::multipart::Form,
+    site: &str,
+    github_action_id_token_request: &Option<GithubActionIdTokenRequest>,
+) -> UploadResult<()> {
     let client = reqwest::Client::new();
     let upload_url = reqwest::Url::parse_with_params(upload_api().as_str(), &[("site", site)])?;
     let upload_url_str = upload_url.as_str().to_string();
 
-    // Make the POST request with form data
-    let response = client.post(upload_url).multipart(form_data).send().await?;
+    let response = calling_apis(
+        client.post(upload_url).multipart(form_data),
+        github_action_id_token_request,
+    )
+    .await?;
     if !response.status().is_success() {
         return Err(UploadError::APIError {
             url: upload_url_str,
@@ -163,6 +182,36 @@ async fn calling_upload(form_data: reqwest::multipart::Form, site: &str) -> Uplo
 
     println!("Done");
     Ok(())
+}
+
+struct GithubActionIdTokenRequest {
+    token: String,
+    url: String,
+}
+
+fn github_action_id_token_request() -> Option<GithubActionIdTokenRequest> {
+    let token = std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN").ok()?;
+    let url = std::env::var("ACTIONS_ID_TOKEN_REQUEST_URL").ok()?;
+
+    Some(GithubActionIdTokenRequest { token, url })
+}
+
+async fn calling_apis(
+    mut request_builder: reqwest::RequestBuilder,
+    github_action_id_token_request: &Option<GithubActionIdTokenRequest>,
+) -> UploadResult<reqwest::Response> {
+    if let Some(github_action_id_token_request) = github_action_id_token_request {
+        request_builder = request_builder
+            .header(
+                "GH_ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+                github_action_id_token_request.token.clone(),
+            )
+            .header(
+                "GH_ACTIONS_ID_TOKEN_REQUEST_URL",
+                github_action_id_token_request.url.clone(),
+            );
+    }
+    Ok(request_builder.send().await?)
 }
 
 fn all_files_api() -> String {
