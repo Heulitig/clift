@@ -1,7 +1,7 @@
 #[derive(Debug, serde::Deserialize)]
 struct File {
     file_name: String,
-    content: Vec<u8>,
+    sha256_hash: String,
 }
 
 pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
@@ -45,9 +45,7 @@ async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
     package_name.ok_or(UploadError::PackageNotFound)
 }
 
-async fn get_uploaded_files(
-    site: &str,
-) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
+async fn get_uploaded_files(site: &str) -> UploadResult<std::collections::HashMap<String, String>> {
     #[derive(serde::Deserialize)]
     struct SuccessResponse {
         data: Vec<File>,
@@ -68,8 +66,8 @@ async fn get_uploaded_files(
     Ok(files
         .data
         .into_iter()
-        .map(|file| (file.file_name, file.content))
-        .collect::<std::collections::HashMap<String, Vec<u8>>>())
+        .map(|file| (file.file_name, file.sha256_hash))
+        .collect::<std::collections::HashMap<String, String>>())
 }
 
 async fn get_local_files(
@@ -104,7 +102,7 @@ async fn get_local_files(
 }
 
 fn compare_files(
-    uploaded_files: &std::collections::HashMap<String, Vec<u8>>,
+    uploaded_files: &std::collections::HashMap<String, String>,
     local_files: &std::collections::HashMap<String, Vec<u8>>,
 ) -> (bool, reqwest::multipart::Form) {
     let mut files_to_be_uploaded = reqwest::multipart::Form::new();
@@ -112,12 +110,15 @@ fn compare_files(
 
     // Get added or updated files
     for (file_name, content) in local_files {
+        let mut file_status = "Adding";
         if let Some(uploaded_file) = uploaded_files.get(file_name) {
-            if content.eq(uploaded_file) {
+            let sha256_hash = clift::commands::utils::generate_hash(content);
+            if sha256_hash.to_uppercase().eq(&uploaded_file.to_uppercase()) {
                 continue;
             }
+            file_status = "Updating";
         }
-        println!("Uploading... {}", file_name);
+        println!("{file_status}... {file_name}");
         files_to_be_uploaded = files_to_be_uploaded.part(
             file_name.clone(),
             reqwest::multipart::Part::bytes(content.to_vec()).file_name(file_name.clone()),
