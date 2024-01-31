@@ -14,9 +14,9 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     let uploaded_files = get_uploaded_files(site.as_str()).await?;
     let local_files = get_local_files(&current_dir).await?;
 
-    let _files = compare_files(&uploaded_files, &local_files);
+    let form_data = compare_files(&uploaded_files, &local_files);
 
-    Ok(())
+    calling_upload(form_data)
 }
 
 async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
@@ -47,9 +47,11 @@ async fn get_uploaded_files(
 ) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
     let all_files_url =
         reqwest::Url::parse_with_params(all_files_api().as_str(), &[("site", site)])?;
+    let all_files_url_str = all_files_url.as_str().to_string();
     let response = reqwest::get(all_files_url).await?;
     if response.status().is_client_error() {
         return Err(UploadError::APIError {
+            url: all_files_url_str,
             message: response.text().await?,
         });
     }
@@ -94,8 +96,8 @@ async fn get_local_files(
 fn compare_files(
     uploaded_files: &std::collections::HashMap<String, Vec<u8>>,
     local_files: &std::collections::HashMap<String, Vec<u8>>,
-) -> std::collections::HashMap<String, Vec<u8>> {
-    let mut files_to_be_uploaded: std::collections::HashMap<String, Vec<u8>> = Default::default();
+) -> reqwest::multipart::Form {
+    let mut files_to_be_uploaded = reqwest::multipart::Form::new();
 
     // Get added or updated files
     for (file_name, content) in local_files {
@@ -104,7 +106,10 @@ fn compare_files(
                 continue;
             }
         }
-        files_to_be_uploaded.insert(file_name.clone(), content.clone());
+        files_to_be_uploaded = files_to_be_uploaded.part(
+            file_name.clone(),
+            reqwest::multipart::Part::bytes(content.to_vec()).file_name(file_name.clone()),
+        );
     }
 
     // Get deleted files
@@ -115,17 +120,40 @@ fn compare_files(
         }
     }
     if !deleted_files.is_empty() {
-        files_to_be_uploaded.insert(
-            "deleted".to_string(),
-            serde_json::to_vec(&deleted_files).unwrap(),
+        files_to_be_uploaded = files_to_be_uploaded.part(
+            "deleted",
+            reqwest::multipart::Part::bytes(serde_json::to_vec(&deleted_files).unwrap())
+                .file_name("deleted"),
         );
     }
 
     files_to_be_uploaded
 }
 
+async fn calling_upload(form_data: reqwest::multipart::Form) -> UploadResult<()> {
+    // Create a reqwest client
+    let client = reqwest::Client::new();
+    let upload_url = reqwest::Url::parse_with_params(upload_api().as_str(), &[("site", site)])?;
+    let upload_url_str = upload_url.as_str().to_string();
+
+    // Make the POST request with form data
+    let response = client.post(upload_url).multipart(form_data).send().await?;
+    if response.status().is_client_error() {
+        return Err(UploadError::APIError {
+            url: upload_url_str,
+            message: response.text().await?,
+        });
+    }
+
+    Ok(())
+}
+
 fn all_files_api() -> String {
     format!("{}/api/all-files/", clift::API_FIFTHTRY_COM)
+}
+
+fn upload_api() -> String {
+    format!("{}/api/upload/", clift::API_FIFTHTRY_COM)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -138,8 +166,8 @@ pub enum UploadError {
     ReqwestError(#[from] reqwest::Error),
     #[error("UploadError: URLParseError: {}", _0)]
     UrlParseError(#[from] url::ParseError),
-    #[error("UploadError: APIError: {message}")]
-    APIError { message: String },
+    #[error("UploadError: APIError: `{url}` API fails {message}")]
+    APIError { url: String, message: String },
 }
 
 type UploadResult<T> = std::result::Result<T, UploadError>;
