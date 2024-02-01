@@ -23,14 +23,13 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Build-musl
         uses: gmiam/rust-musl-action@0f17df9aea6eadc5eaeccdf733ec78c203103b61
-        continue-on-error: false
         with:
           args: cargo build --target x86_64-unknown-linux-musl --release
       - name: run clift
         run: ./target/x86_64-unknown-linux-musl/release/clift --version
       - name: Rename assets
         run: |
-          mv ./target/x86_64-unknown-linux-musl/release/clift ./clift_linux_musl_x86_64
+          cp ./target/x86_64-unknown-linux-musl/release/clift ./clift_linux_musl_x86_64
       - name: Update .github/RELEASE_TEMPLATE.md
         run: |
           sed -i "s/GITHUB_SHA/${GITHUB_SHA}/g" .github/RELEASE_TEMPLATE.md
