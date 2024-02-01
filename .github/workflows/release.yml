@@ -32,14 +32,14 @@ jobs:
         run: ./target/x86_64-unknown-linux-musl/release/clift --version
       - name: Rename assets
         run: |
-          mv ./target/x86_64-unknown-linux-musl/release/clift ~/download/linux_musl/clift_linux_musl_x86_64
+          mv ./target/x86_64-unknown-linux-musl/release/clift ~/clift_linux_musl_x86_64
       - name: Update .github/RELEASE_TEMPLATE.md
         run: |
           sed -i "s/GITHUB_SHA/${GITHUB_SHA}/g" .github/RELEASE_TEMPLATE.md
           sed -i "s/DATE/$(date)/g" .github/RELEASE_TEMPLATE.md
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "~/download/linux_musl/clift_linux_musl_x86_64"
+          artifacts: "~/clift_linux_musl_x86_64"
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.event.inputs.releaseTag }}
