@@ -203,11 +203,11 @@ async fn calling_apis(
     if let Some(github_action_id_token_request) = github_action_id_token_request {
         request_builder = request_builder
             .header(
-                "GH_ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+                "X-FIFTHTRY-GH-ACTIONS-ID-TOKEN-REQUEST-TOKEN",
                 github_action_id_token_request.token.clone(),
             )
             .header(
-                "GH_ACTIONS_ID_TOKEN_REQUEST_URL",
+                "X-FIFTHTRY-GH-ACTIONS-ID-TOKEN-REQUEST-URL",
                 github_action_id_token_request.url.clone(),
             );
     }
