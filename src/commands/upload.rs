@@ -12,7 +12,7 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
         None => get_site(&current_dir).await?,
     };
 
-    let github_action_id_token_request = github_action_id_token_request();
+    let github_action_id_token_request = github_action_id_token_request()?;
 
     let uploaded_files = get_uploaded_files(site.as_str(), &github_action_id_token_request).await?;
     let local_files = get_local_files(&current_dir).await?;
@@ -50,7 +50,7 @@ async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
 
 async fn get_uploaded_files(
     site: &str,
-    github_action_id_token_request: &Option<GithubActionIdTokenRequest>,
+    github_action_id_token_request: &GithubActionIdTokenRequest,
 ) -> UploadResult<std::collections::HashMap<String, String>> {
     #[derive(serde::Deserialize)]
     struct SuccessResponse {
@@ -162,7 +162,7 @@ fn compare_files(
 async fn calling_upload(
     form_data: reqwest::multipart::Form,
     site: &str,
-    github_action_id_token_request: &Option<GithubActionIdTokenRequest>,
+    github_action_id_token_request: &GithubActionIdTokenRequest,
 ) -> UploadResult<()> {
     let client = reqwest::Client::new();
     let upload_url = reqwest::Url::parse_with_params(upload_api().as_str(), &[("site", site)])?;
@@ -189,28 +189,28 @@ struct GithubActionIdTokenRequest {
     url: String,
 }
 
-fn github_action_id_token_request() -> Option<GithubActionIdTokenRequest> {
-    let token = std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN").ok()?;
-    let url = std::env::var("ACTIONS_ID_TOKEN_REQUEST_URL").ok()?;
+fn github_action_id_token_request() -> UploadResult<GithubActionIdTokenRequest> {
+    let token = std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+        .map_err(|_| UploadError::GithubTokenNotFound)?;
+    let url = std::env::var("ACTIONS_ID_TOKEN_REQUEST_URL")
+        .map_err(|_| UploadError::GithubTokenNotFound)?;
 
-    Some(GithubActionIdTokenRequest { token, url })
+    Ok(GithubActionIdTokenRequest { token, url })
 }
 
 async fn calling_apis(
     mut request_builder: reqwest::RequestBuilder,
-    github_action_id_token_request: &Option<GithubActionIdTokenRequest>,
+    github_action_id_token_request: &GithubActionIdTokenRequest,
 ) -> UploadResult<reqwest::Response> {
-    if let Some(github_action_id_token_request) = github_action_id_token_request {
-        request_builder = request_builder
-            .header(
-                "X-FIFTHTRY-GH-ACTIONS-ID-TOKEN-REQUEST-TOKEN",
-                github_action_id_token_request.token.clone(),
-            )
-            .header(
-                "X-FIFTHTRY-GH-ACTIONS-ID-TOKEN-REQUEST-URL",
-                github_action_id_token_request.url.clone(),
-            );
-    }
+    request_builder = request_builder
+        .header(
+            "X-FIFTHTRY-GH-ACTIONS-ID-TOKEN-REQUEST-TOKEN",
+            github_action_id_token_request.token.clone(),
+        )
+        .header(
+            "X-FIFTHTRY-GH-ACTIONS-ID-TOKEN-REQUEST-URL",
+            github_action_id_token_request.url.clone(),
+        );
     Ok(request_builder.send().await?)
 }
 
@@ -224,16 +224,18 @@ fn upload_api() -> String {
 
 #[derive(thiserror::Error, Debug)]
 pub enum UploadError {
-    #[error("UploadError: PackageNotFound")]
+    #[error("PackageNotFound")]
     PackageNotFound,
-    #[error("UploadError: IOError: {}", _0)]
+    #[error("IOError: {}", _0)]
     IOError(#[from] std::io::Error),
-    #[error("UploadError: {}", _0)]
+    #[error("{}", _0)]
     ReqwestError(#[from] reqwest::Error),
-    #[error("UploadError: URLParseError: {}", _0)]
+    #[error("URLParseError: {}", _0)]
     UrlParseError(#[from] url::ParseError),
-    #[error("UploadError: APIError: `{url}` API fails {message}")]
+    #[error("APIError: `{url}` API fails {message}")]
     APIError { url: String, message: String },
+    #[error("GithubTokenNotFound, Help: need `ACTIONS_ID_TOKEN_REQUEST_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_URL` environment variables")]
+    GithubTokenNotFound,
 }
 
 type UploadResult<T> = std::result::Result<T, UploadError>;
