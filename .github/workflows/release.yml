@@ -20,8 +20,6 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            ftd/target
-            fifthtry_content/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Build-musl
         uses: gmiam/rust-musl-action@0f17df9aea6eadc5eaeccdf733ec78c203103b61
