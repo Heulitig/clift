@@ -12,10 +12,11 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
         None => get_site(&current_dir).await?,
     };
 
+    let local_files = get_local_files(&current_dir).await?;
+
     let github_action_id_token_request = github_action_id_token_request()?;
 
     let uploaded_files = get_uploaded_files(site.as_str(), &github_action_id_token_request).await?;
-    let local_files = get_local_files(&current_dir).await?;
 
     let (found_changes, form_data) = compare_files(&uploaded_files, &local_files);
 
@@ -87,10 +88,17 @@ async fn get_local_files(
 ) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
     use tokio::io::AsyncReadExt;
 
-    let ignore_path = ignore::WalkBuilder::new(current_dir);
+    let ignore_path = ignore::WalkBuilder::new(current_dir)
+        .hidden(false)
+        .git_ignore(true)
+        .git_exclude(true)
+        .git_global(true)
+        .ignore(true)
+        .parents(true)
+        .build();
 
     let mut files: std::collections::HashMap<String, Vec<u8>> = Default::default();
-    for path in ignore_path.build().flatten() {
+    for path in ignore_path.flatten() {
         if path.path().is_dir() {
             continue;
         }
@@ -106,6 +114,14 @@ async fn get_local_files(
             .trim_start_matches(current_dir.to_str().unwrap())
             .trim_start_matches('/')
             .to_string();
+
+        if path_without_package_dir.starts_with(".git/")
+            || path_without_package_dir.starts_with(".github/")
+        {
+            continue;
+        }
+
+        dbg!(&path_without_package_dir);
 
         files.insert(path_without_package_dir, content);
     }
