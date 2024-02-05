@@ -125,11 +125,11 @@ setup() {
     fi
 
     if [ -n "$VERSION" ]; then
-        URL="https://github.com/FiftTry/clift/releases/download/$VERSION"
+        URL="https://github.com/FifthTry/clift/releases/download/$VERSION"
         log_message "clift-version file found."
         log_message "Installing clift $VERSION in $DESTINATION_PATH."
     else
-        URL="https://github.com/FiftTry/clift/releases/latest/download"
+        URL="https://github.com/FifthTry/clift/releases/latest/download"
         log_message "clift-version file not found."
         log_message "Downloading the latest release of clift in $DESTINATION_PATH."
     fi
