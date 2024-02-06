@@ -1,9 +1,3 @@
-#[derive(Debug, serde::Deserialize)]
-struct File {
-    file_name: String,
-    sha256_hash: String,
-}
-
 pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     let current_dir = std::env::current_dir()?;
 
@@ -13,76 +7,61 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     };
 
     let local_files = get_local_files(&current_dir).await?;
+    let github_action_id_token_request = clift::commands::github_action_id_token_request()?;
 
-    let github_action_id_token_request = github_action_id_token_request()?;
+    calling_initiate_upload_api(site.as_str(), &local_files, &github_action_id_token_request)
+        .await?;
 
-    let uploaded_files = get_uploaded_files(site.as_str(), &github_action_id_token_request).await?;
-
-    let (found_changes, form_data) = compare_files(&uploaded_files, &local_files);
-
-    if found_changes {
-        return calling_upload(form_data, site.as_str(), &github_action_id_token_request).await;
-    }
-    Ok(())
+    todo!()
 }
 
-async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
-    use tokio::io::AsyncReadExt;
-
-    let mut file = tokio::fs::File::open(current_dir.join("FASTN.ftd")).await?;
-    let mut fastn_content = String::new();
-    file.read_to_string(&mut fastn_content).await?;
-
-    // Split the input into lines
-    let lines: Vec<&str> = fastn_content.lines().collect();
-
-    // Iterate over the lines to find the one containing the package name
-    let mut package_name = None;
-    for line in lines {
-        if line.contains("-- fastn.package: ") {
-            // Split the line by ':' and get the second part
-            package_name = line.split_once(':').map(|(_, v)| v.trim().to_string());
-            break;
-        }
-    }
-
-    package_name.ok_or(UploadError::PackageNotFound)
-}
-
-async fn get_uploaded_files(
+async fn calling_initiate_upload_api(
     site: &str,
-    github_action_id_token_request: &GithubActionIdTokenRequest,
-) -> UploadResult<std::collections::HashMap<String, String>> {
-    #[derive(serde::Deserialize)]
-    struct SuccessResponse {
-        data: Vec<File>,
-    }
+    local_files: &std::collections::HashMap<String, Vec<u8>>,
+    github_action_id_token_request: &clift::commands::GithubActionIdTokenRequest,
+) -> UploadResult<()> {
+    let content_to_upload: Vec<ContentToUpload> = local_files
+        .iter()
+        .map(|(file_name, content)| ContentToUpload {
+            file_name: file_name.to_string(),
+            sha256_hash: clift::commands::utils::generate_hash(&content),
+            file_size: content.len(),
+        })
+        .collect();
 
-    let all_files_url =
-        reqwest::Url::parse_with_params(all_files_api().as_str(), &[("site", site)])?;
-    let all_files_url_str = all_files_url.as_str().to_string();
+    let upload_url = reqwest::Url::parse(initiate_upload_api().as_str())?;
+    let upload_url_str = upload_url.as_str().to_string();
+    let client = reqwest::Client::new();
+
+    let body = serde_json::to_value(InitiateUploadRequest {
+        site: site.to_string(),
+        files: content_to_upload,
+    })
+    .unwrap(); //todo: remove unwrap
 
     let response = calling_apis(
-        reqwest::Client::new().get(all_files_url),
+        client.post(upload_url).body(body),
         github_action_id_token_request,
     )
     .await?;
 
-    if !response.status().is_success() {
-        return Err(UploadError::APIError {
-            url: all_files_url_str,
-            message: response.text().await?,
-        });
-    }
-    let files: SuccessResponse = response.json().await?;
-
-    Ok(files
-        .data
-        .into_iter()
-        .map(|file| (file.file_name, file.sha256_hash))
-        .collect::<std::collections::HashMap<String, String>>())
+    todo!()
 }
 
+#[derive(Debug, serde::Serialize)]
+struct ContentToUpload {
+    pub file_name: String,   // name of the file
+    pub sha256_hash: String, // hash of the file
+    pub file_size: usize,    // size of the file
+}
+
+#[derive(serde::Serialize)]
+struct InitiateUploadRequest {
+    site: String,
+    files: Vec<ContentToUpload>,
+}
+
+// Returns hashmap of file_name and
 async fn get_local_files(
     current_dir: &std::path::Path,
 ) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
@@ -117,11 +96,10 @@ async fn get_local_files(
 
         if path_without_package_dir.starts_with(".git/")
             || path_without_package_dir.starts_with(".github/")
+            || path_without_package_dir.eq(".gitignore")
         {
             continue;
         }
-
-        dbg!(&path_without_package_dir);
 
         files.insert(path_without_package_dir, content);
     }
@@ -129,94 +107,9 @@ async fn get_local_files(
     Ok(files)
 }
 
-fn compare_files(
-    uploaded_files: &std::collections::HashMap<String, String>,
-    local_files: &std::collections::HashMap<String, Vec<u8>>,
-) -> (bool, reqwest::multipart::Form) {
-    let mut files_to_be_uploaded = reqwest::multipart::Form::new();
-    let mut found_changes = false;
-
-    // Get added or updated files
-    for (file_name, content) in local_files {
-        let mut file_status = "Adding";
-        if let Some(uploaded_file) = uploaded_files.get(file_name) {
-            let sha256_hash = clift::commands::utils::generate_hash(content);
-            if sha256_hash.to_uppercase().eq(&uploaded_file.to_uppercase()) {
-                continue;
-            }
-            file_status = "Updating";
-        }
-        println!("{file_status}... {file_name}");
-        files_to_be_uploaded = files_to_be_uploaded.part(
-            file_name.clone(),
-            reqwest::multipart::Part::bytes(content.to_vec()).file_name(file_name.clone()),
-        );
-        found_changes = true;
-    }
-
-    // Get deleted files
-    let mut deleted_files = vec![];
-    for file_name in uploaded_files.keys() {
-        if !local_files.contains_key(file_name) {
-            println!("Deleting... {}", file_name);
-            deleted_files.push(file_name.clone());
-        }
-    }
-
-    if !deleted_files.is_empty() {
-        files_to_be_uploaded = files_to_be_uploaded.part(
-            "deleted",
-            reqwest::multipart::Part::bytes(serde_json::to_vec(&deleted_files).unwrap())
-                .file_name("deleted"),
-        );
-        found_changes = true;
-    }
-
-    (found_changes, files_to_be_uploaded)
-}
-
-async fn calling_upload(
-    form_data: reqwest::multipart::Form,
-    site: &str,
-    github_action_id_token_request: &GithubActionIdTokenRequest,
-) -> UploadResult<()> {
-    let client = reqwest::Client::new();
-    let upload_url = reqwest::Url::parse_with_params(upload_api().as_str(), &[("site", site)])?;
-    let upload_url_str = upload_url.as_str().to_string();
-
-    let response = calling_apis(
-        client.post(upload_url).multipart(form_data),
-        github_action_id_token_request,
-    )
-    .await?;
-    if !response.status().is_success() {
-        return Err(UploadError::APIError {
-            url: upload_url_str,
-            message: response.text().await?,
-        });
-    }
-
-    println!("Done");
-    Ok(())
-}
-
-struct GithubActionIdTokenRequest {
-    token: String,
-    url: String,
-}
-
-fn github_action_id_token_request() -> UploadResult<GithubActionIdTokenRequest> {
-    let token = std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-        .map_err(|_| UploadError::GithubTokenNotFound)?;
-    let url = std::env::var("ACTIONS_ID_TOKEN_REQUEST_URL")
-        .map_err(|_| UploadError::GithubTokenNotFound)?;
-
-    Ok(GithubActionIdTokenRequest { token, url })
-}
-
 async fn calling_apis(
     mut request_builder: reqwest::RequestBuilder,
-    github_action_id_token_request: &GithubActionIdTokenRequest,
+    github_action_id_token_request: &clift::commands::GithubActionIdTokenRequest,
 ) -> UploadResult<reqwest::Response> {
     request_builder = request_builder
         .header(
@@ -230,12 +123,31 @@ async fn calling_apis(
     Ok(request_builder.send().await?)
 }
 
-fn all_files_api() -> String {
-    format!("{}/api/all-files/", clift::API_FIFTHTRY_COM)
+fn initiate_upload_api() -> String {
+    format!("{}/api/initiate-upload/", clift::API_FIFTHTRY_COM)
 }
 
-fn upload_api() -> String {
-    format!("{}/api/upload/", clift::API_FIFTHTRY_COM)
+async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
+    use tokio::io::AsyncReadExt;
+
+    let mut file = tokio::fs::File::open(current_dir.join("FASTN.ftd")).await?;
+    let mut fastn_content = String::new();
+    file.read_to_string(&mut fastn_content).await?;
+
+    // Split the input into lines
+    let lines: Vec<&str> = fastn_content.lines().collect();
+
+    // Iterate over the lines to find the one containing the package name
+    let mut package_name = None;
+    for line in lines {
+        if line.contains("-- fastn.package: ") {
+            // Split the line by ':' and get the second part
+            package_name = line.split_once(':').map(|(_, v)| v.trim().to_string());
+            break;
+        }
+    }
+
+    package_name.ok_or(UploadError::PackageNotFound)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -252,6 +164,8 @@ pub enum UploadError {
     APIError { url: String, message: String },
     #[error("GithubTokenNotFound, Help: need `ACTIONS_ID_TOKEN_REQUEST_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_URL` environment variables")]
     GithubTokenNotFound,
+    #[error("Environment Variable Error {0}")]
+    EnvVarError(#[from] std::env::VarError),
 }
 
 type UploadResult<T> = std::result::Result<T, UploadError>;
