@@ -33,14 +33,11 @@ async fn calling_initiate_upload_api(
     let upload_url_str = upload_url.as_str().to_string();
     let client = reqwest::Client::new();
 
-    let body = serde_json::to_value(InitiateUploadRequest {
-        site: site.to_string(),
-        files: content_to_upload,
-    })
-    .unwrap(); //todo: remove unwrap
-
     let response = calling_apis(
-        client.post(upload_url).body(body),
+        client.post(upload_url).json(&InitiateUploadRequest {
+            site: site.to_string(),
+            files: content_to_upload,
+        }),
         github_action_id_token_request,
     )
     .await?;
