@@ -88,12 +88,10 @@ async fn initiate_upload(
     Ok(json.data)
 }
 
-
 enum Uploader {
     File(tokio::fs::File),
-    S3(PreSignedRequest, Vec<u8>)
+    S3(PreSignedRequest, Vec<u8>),
 }
-
 
 impl Uploader {
     async fn debug(path: &std::path::Path) -> UploadResult<Uploader> {
@@ -105,12 +103,10 @@ impl Uploader {
         Uploader::S3(sr, vec![])
     }
 
-    async fn upload(&mut self, path: &std::path::Path) -> UploadResult<()>{
-        use tokio::io::{AsyncWriteExt};
+    async fn upload(&mut self, path: &std::path::Path) -> UploadResult<()> {
+        use tokio::io::AsyncWriteExt;
         match self {
-            Uploader::File(file) => {
-                file.write_all(&tokio::fs::read(path).await?).await?
-            }
+            Uploader::File(file) => file.write_all(&tokio::fs::read(path).await?).await?,
             Uploader::S3(_, v) => {
                 v.append(&mut tokio::fs::read(path).await?);
             }
@@ -120,25 +116,28 @@ impl Uploader {
 
     async fn commit(&mut self) -> UploadResult<()> {
         if let Uploader::S3(sr, v) = self {
-                let client = reqwest::Client::new();
-                let mut request = client.request(reqwest::Method::from_bytes(sr.method.as_bytes()).unwrap(), &sr.url);
-                for (k, v) in sr.headers.iter() {
-                    request = request.header(k, v);
-                }
+            let client = reqwest::Client::new();
+            let mut request = client.request(
+                reqwest::Method::from_bytes(sr.method.as_bytes()).unwrap(),
+                &sr.url,
+            );
+            for (k, v) in sr.headers.iter() {
+                request = request.header(k, v);
+            }
 
-                request.body(v.clone()).send().await?;
+            request.body(v.clone()).send().await?;
         }
 
         Ok(())
     }
 }
 
-async fn upload_(
-    data: &InitiateUploadResponse,
-    current_dir: &std::path::Path,
-) -> UploadResult<()> {
+async fn upload_(data: &InitiateUploadResponse, current_dir: &std::path::Path) -> UploadResult<()> {
     let mut uploader = if std::env::var("DEBUG_UPLOAD").is_ok() {
-        let path = current_dir.parent().unwrap().join(format!("{}.tejar", data.tejar_file_id));
+        let path = current_dir
+            .parent()
+            .unwrap()
+            .join(format!("{}.tejar", data.tejar_file_id));
         Uploader::debug(&path).await?
     } else {
         Uploader::s3(data.pre_signed_request.clone())
