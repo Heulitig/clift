@@ -29,13 +29,20 @@ struct SuccessResponse<T> {
     success: bool,
 }
 
+#[derive(serde::Deserialize, Clone)]
+pub struct PreSignedRequest {
+    pub url: String,
+    pub method: String,
+    pub headers: std::collections::HashMap<String, String>,
+}
+
 #[derive(serde::Deserialize)]
 struct InitiateUploadResponse {
     new_files: Vec<String>,
     updated_files: Vec<String>,
     upload_session_id: i64,
     tejar_file_id: i64,
-    signed_s3_upload_url: String,
+    pre_signed_request: PreSignedRequest,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -81,70 +88,92 @@ async fn initiate_upload(
     Ok(json.data)
 }
 
-async fn upload_(data: &InitiateUploadResponse, current_dir: &std::path::Path) -> UploadResult<()> {
-    match std::env::var("DEBUG_UPLOAD") {
-        Ok(t) if t.eq("true") => upload_stream_in_debug_mode(data, current_dir).await?,
-        _ => upload_stream_in_s3(data, current_dir).await?,
-    }
-    Ok(())
+
+enum Uploader {
+    File(tokio::fs::File),
+    S3(PreSignedRequest, Vec<u8>)
 }
 
-async fn upload_stream_in_debug_mode(
+
+impl Uploader {
+    async fn debug(path: &std::path::Path) -> UploadResult<Uploader> {
+        let file = tokio::fs::File::create(path).await?;
+        Ok(Uploader::File(file))
+    }
+
+    fn s3(sr: PreSignedRequest) -> Uploader {
+        Uploader::S3(sr, vec![])
+    }
+
+    async fn upload(&mut self, path: &std::path::Path) -> UploadResult<()>{
+        use tokio::io::{AsyncWriteExt};
+        match self {
+            Uploader::File(file) => {
+                file.write_all(&tokio::fs::read(path).await?).await?
+            }
+            Uploader::S3(_, v) => {
+                v.append(&mut tokio::fs::read(path).await?);
+            }
+        }
+        Ok(())
+    }
+
+    async fn commit(&mut self) -> UploadResult<()> {
+        if let Uploader::S3(sr, v) = self {
+                let client = reqwest::Client::new();
+                let mut request = client.request(reqwest::Method::from_bytes(sr.method.as_bytes()).unwrap(), &sr.url);
+                for (k, v) in sr.headers.iter() {
+                    request = request.header(k, v);
+                }
+
+                request.body(v.clone()).send().await?;
+        }
+
+        Ok(())
+    }
+}
+
+async fn upload_(
     data: &InitiateUploadResponse,
     current_dir: &std::path::Path,
 ) -> UploadResult<()> {
-    let mut upload_on = tokio::fs::File::create(
-        current_dir
-            .parent()
-            .unwrap()
-            .join(data.tejar_file_id.to_string()),
-    )
-    .await?;
+    let mut uploader = if std::env::var("DEBUG_UPLOAD").is_ok() {
+        let path = current_dir.parent().unwrap().join(format!("{}.tejar", data.tejar_file_id));
+        Uploader::debug(&path).await?
+    } else {
+        Uploader::s3(data.pre_signed_request.clone())
+    };
 
     upload_stream_in_debug_mode_(
+        &mut uploader,
         data.new_files.as_slice(),
-        &mut upload_on,
         current_dir,
         "Added",
     )
     .await?;
     upload_stream_in_debug_mode_(
+        &mut uploader,
         data.updated_files.as_slice(),
-        &mut upload_on,
         current_dir,
         "Updated",
     )
     .await?;
-    Ok(())
+
+    uploader.commit().await
 }
 
 async fn upload_stream_in_debug_mode_(
+    uploader: &mut Uploader,
     files: &[String],
-    upload_on: &mut tokio::fs::File,
     current_dir: &std::path::Path,
     status: &str,
 ) -> UploadResult<()> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
     for file_name in files.iter() {
-        let mut file = tokio::fs::File::open(current_dir.join(file_name)).await?;
-        let mut content = vec![];
-        // TODO: read file stream instead of reading entire file content into memory
-        file.read_to_end(&mut content).await?;
-
-        // upload_on.seek(std::io::SeekFrom::End(0));
-        upload_on.write_all(content.as_slice()).await?;
+        uploader.upload(&current_dir.join(file_name)).await?;
         println!("{file_name}.... {status}");
     }
 
     Ok(())
-}
-
-async fn upload_stream_in_s3(
-    data: &InitiateUploadResponse,
-    _current_dir: &std::path::Path,
-) -> UploadResult<()> {
-    todo!("Upload to {}", data.signed_s3_upload_url)
 }
 
 #[derive(serde::Serialize)]
