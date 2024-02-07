@@ -1,5 +1,4 @@
 mod github_helper;
-mod old_upload;
 mod upload;
 mod utils;
 
