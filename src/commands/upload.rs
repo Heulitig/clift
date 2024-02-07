@@ -8,14 +8,18 @@ pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
 
     let github_action_id_token_request = clift::commands::github_action_id_token_request()?;
 
+    println!("Initialing Upload....");
     let data =
         initiate_upload(site.as_str(), &current_dir, &github_action_id_token_request).await?;
 
     upload_(&data, &current_dir).await?;
 
+    println!("Committing Upload...");
+
     commit_upload(site.as_str(), &data, &github_action_id_token_request).await?;
 
-    todo!()
+    println!("Upload Done");
+    Ok(())
 }
 
 #[derive(serde::Deserialize)]
@@ -90,8 +94,13 @@ async fn upload_stream_in_debug_mode(
 ) -> UploadResult<()> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let mut upload_on =
-        tokio::fs::File::open(current_dir.join(data.tejar_file_id.to_string())).await?;
+    let mut upload_on = tokio::fs::File::create(
+        current_dir
+            .parent()
+            .unwrap()
+            .join(data.tejar_file_id.to_string()),
+    )
+    .await?;
     for file_name in data.files_to_upload.iter() {
         let mut file = tokio::fs::File::open(current_dir.join(file_name)).await?;
         let mut content = vec![];
@@ -100,6 +109,7 @@ async fn upload_stream_in_debug_mode(
 
         // upload_on.seek(std::io::SeekFrom::End(0));
         upload_on.write_all(content.as_slice()).await?;
+        println!("{}.... Uploaded", file_name);
     }
     Ok(())
 }
@@ -137,7 +147,7 @@ async fn commit_upload(
 
     if !response.status().is_success() {
         return Err(UploadError::APIError {
-            url: initiate_upload_api(),
+            url: commit_upload_api(),
             message: response.text().await?,
         });
     }
@@ -260,3 +270,13 @@ pub enum UploadError {
 }
 
 type UploadResult<T> = std::result::Result<T, UploadError>;
+
+/*
+To run in debug mode
+
+```sh
+export ACTIONS_ID_TOKEN_REQUEST_URL="url"
+export ACTIONS_ID_TOKEN_REQUEST_TOKEN="token"
+export DEBUG_UPLOAD="true"
+```
+*/
