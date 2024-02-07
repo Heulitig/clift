@@ -1,40 +1,30 @@
+use std::path::PathBuf;
+
 pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     let current_dir = std::env::current_dir()?;
 
     let site = match site {
         Some(site) => site.clone(),
-        None => get_site(&current_dir).await?,
+        None => get_site_without_parsing_ftd(&current_dir).await?,
     };
 
-    let local_files = get_local_files(&current_dir).await?;
     let github_action_id_token_request = clift::commands::github_action_id_token_request()?;
 
-    calling_initiate_upload_api(site.as_str(), &local_files, &github_action_id_token_request)
+    initiate_upload(site.as_str(), current_dir, &github_action_id_token_request)
         .await?;
 
     todo!()
 }
 
-async fn calling_initiate_upload_api(
+async fn initiate_upload(
     site: &str,
-    local_files: &std::collections::HashMap<String, Vec<u8>>,
+    current_dir: std::path::PathBuf,
     github_action_id_token_request: &clift::commands::GithubActionIdTokenRequest,
 ) -> UploadResult<()> {
-    let content_to_upload: Vec<ContentToUpload> = local_files
-        .iter()
-        .map(|(file_name, content)| ContentToUpload {
-            file_name: file_name.to_string(),
-            sha256_hash: clift::commands::utils::generate_hash(&content),
-            file_size: content.len(),
-        })
-        .collect();
+    let content_to_upload = get_local_files(&current_dir).await?;
 
-    let upload_url = reqwest::Url::parse(initiate_upload_api().as_str())?;
-    let upload_url_str = upload_url.as_str().to_string();
-    let client = reqwest::Client::new();
-
-    let response = calling_apis(
-        client.post(upload_url).json(&InitiateUploadRequest {
+    let response = call_api(
+        reqwest::Client::new().post(initiate_upload_api()).json(&InitiateUploadRequest {
             site: site.to_string(),
             files: content_to_upload,
         }),
@@ -58,10 +48,10 @@ struct InitiateUploadRequest {
     files: Vec<ContentToUpload>,
 }
 
-// Returns hashmap of file_name and
+// Returns hashmap of file_name
 async fn get_local_files(
     current_dir: &std::path::Path,
-) -> UploadResult<std::collections::HashMap<String, Vec<u8>>> {
+) -> UploadResult<Vec<ContentToUpload>> {
     use tokio::io::AsyncReadExt;
 
     let ignore_path = ignore::WalkBuilder::new(current_dir)
@@ -73,7 +63,7 @@ async fn get_local_files(
         .parents(true)
         .build();
 
-    let mut files: std::collections::HashMap<String, Vec<u8>> = Default::default();
+    let mut files = vec![];
     for path in ignore_path.flatten() {
         if path.path().is_dir() {
             continue;
@@ -98,13 +88,19 @@ async fn get_local_files(
             continue;
         }
 
-        files.insert(path_without_package_dir, content);
+        files.push(ContentToUpload {
+            file_name: path_without_package_dir,
+            // TODO: create the hash using file stream instead of reading entire
+            //       file content into memory
+            sha256_hash: clift::commands::utils::generate_hash(&content),
+            file_size: content.len(),
+        });
     }
 
     Ok(files)
 }
 
-async fn calling_apis(
+async fn call_api(
     mut request_builder: reqwest::RequestBuilder,
     github_action_id_token_request: &clift::commands::GithubActionIdTokenRequest,
 ) -> UploadResult<reqwest::Response> {
@@ -124,7 +120,7 @@ fn initiate_upload_api() -> String {
     format!("{}/api/initiate-upload/", clift::API_FIFTHTRY_COM)
 }
 
-async fn get_site(current_dir: &std::path::Path) -> UploadResult<String> {
+async fn get_site_without_parsing_ftd(current_dir: &std::path::Path) -> UploadResult<String> {
     use tokio::io::AsyncReadExt;
 
     let mut file = tokio::fs::File::open(current_dir.join("FASTN.ftd")).await?;

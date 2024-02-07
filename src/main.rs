@@ -1,6 +1,7 @@
 extern crate self as clift;
 mod commands;
 mod error;
+
 pub use error::{Error, Result};
 
 fn main() {
