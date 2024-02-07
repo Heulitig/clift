@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 pub(crate) async fn upload(site: Option<&String>) -> UploadResult<()> {
     let current_dir = std::env::current_dir()?;
 
