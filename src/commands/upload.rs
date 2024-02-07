@@ -78,8 +78,8 @@ async fn initiate_upload(
 
 async fn upload_(data: &InitiateUploadResponse, current_dir: &std::path::Path) -> UploadResult<()> {
     match std::env::var("DEBUG_UPLOAD") {
-        Ok(t) if t.eq("true") => upload_stream_in_debug_mode(data, &current_dir).await?,
-        _ => upload_stream_in_s3(data, &current_dir).await?,
+        Ok(t) if t.eq("true") => upload_stream_in_debug_mode(data, current_dir).await?,
+        _ => upload_stream_in_s3(data, current_dir).await?,
     }
     Ok(())
 }
@@ -99,7 +99,7 @@ async fn upload_stream_in_debug_mode(
         file.read_to_end(&mut content).await?;
 
         // upload_on.seek(std::io::SeekFrom::End(0));
-        upload_on.write(content.as_slice()).await?;
+        upload_on.write_all(content.as_slice()).await?;
     }
     Ok(())
 }
