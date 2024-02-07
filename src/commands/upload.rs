@@ -31,7 +31,8 @@ struct SuccessResponse<T> {
 
 #[derive(serde::Deserialize)]
 struct InitiateUploadResponse {
-    files_to_upload: Vec<String>,
+    new_files: Vec<String>,
+    updated_files: Vec<String>,
     upload_session_id: i64,
     tejar_file_id: i64,
     signed_s3_upload_url: String,
@@ -92,8 +93,6 @@ async fn upload_stream_in_debug_mode(
     data: &InitiateUploadResponse,
     current_dir: &std::path::Path,
 ) -> UploadResult<()> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
     let mut upload_on = tokio::fs::File::create(
         current_dir
             .parent()
@@ -101,7 +100,33 @@ async fn upload_stream_in_debug_mode(
             .join(data.tejar_file_id.to_string()),
     )
     .await?;
-    for file_name in data.files_to_upload.iter() {
+
+    upload_stream_in_debug_mode_(
+        data.new_files.as_slice(),
+        &mut upload_on,
+        current_dir,
+        "Added",
+    )
+    .await?;
+    upload_stream_in_debug_mode_(
+        data.updated_files.as_slice(),
+        &mut upload_on,
+        current_dir,
+        "Updated",
+    )
+    .await?;
+    Ok(())
+}
+
+async fn upload_stream_in_debug_mode_(
+    files: &[String],
+    upload_on: &mut tokio::fs::File,
+    current_dir: &std::path::Path,
+    status: &str,
+) -> UploadResult<()> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    for file_name in files.iter() {
         let mut file = tokio::fs::File::open(current_dir.join(file_name)).await?;
         let mut content = vec![];
         // TODO: read file stream instead of reading entire file content into memory
@@ -109,8 +134,9 @@ async fn upload_stream_in_debug_mode(
 
         // upload_on.seek(std::io::SeekFrom::End(0));
         upload_on.write_all(content.as_slice()).await?;
-        println!("{}.... Uploaded", file_name);
+        println!("{file_name}.... {status}");
     }
+
     Ok(())
 }
 
