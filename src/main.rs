@@ -63,4 +63,3 @@ pub fn version() -> &'static str {
 }
 
 pub(crate) const API_FIFTHTRY_COM: &str = "https://api.fifthtry.com";
-// pub(crate) const API_FIFTHTRY_COM: &str = "http://127.0.0.1:8001";

@@ -274,12 +274,18 @@ async fn call_api(
     Ok(request_builder.send().await?)
 }
 
+fn api(name: &str) -> String {
+    if let Ok(url) = std::env::var("DEBUG_API_FIFTHTRY_COM") {
+        return format!("{}/api/{name}/", url);
+    }
+    format!("{}/api/{name}/", clift::API_FIFTHTRY_COM)
+}
 fn initiate_upload_api() -> String {
-    format!("{}/api/initiate-upload/", clift::API_FIFTHTRY_COM)
+    api("initiate-upload")
 }
 
 fn commit_upload_api() -> String {
-    format!("{}/api/commit-upload/", clift::API_FIFTHTRY_COM)
+    api("commit-upload")
 }
 
 async fn get_site_without_parsing_ftd(current_dir: &std::path::Path) -> UploadResult<String> {
