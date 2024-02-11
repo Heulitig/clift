@@ -11,5 +11,5 @@ pub async fn call_api(
             "X-FIFTHTRY-GH-ACTIONS-ID-TOKEN-REQUEST-URL",
             github_action_id_token_request.url.clone(),
         );
-    Ok(request_builder.send().await?)
+    request_builder.send().await
 }
