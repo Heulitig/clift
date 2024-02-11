@@ -1,9 +1,3 @@
-extern crate self as clift;
-mod commands;
-mod error;
-
-pub use error::{Error, Result};
-
 fn main() {
     fastn_observer::observe();
 
@@ -15,18 +9,8 @@ fn main() {
 }
 
 async fn outer_main() {
-    if let Err(e) = async_main().await {
-        eprintln!("{:?}", e);
-        std::process::exit(1);
-    }
-}
-
-async fn async_main() -> clift::Result<()> {
-    let matches = app(version()).get_matches();
-
-    clift_commands(&matches).await?;
-
-    Ok(())
+    let matches = app(clift::utils::version()).get_matches();
+    clift_commands(&matches).await
 }
 
 fn app(version: &'static str) -> clap::Command {
@@ -40,26 +24,13 @@ fn app(version: &'static str) -> clap::Command {
         )
 }
 
-async fn clift_commands(matches: &clap::ArgMatches) -> clift::Result<()> {
+async fn clift_commands(matches: &clap::ArgMatches) {
     if let Some(upload) = matches.subcommand_matches("upload") {
         let site = upload.get_one::<String>("site");
-        return Ok(clift::commands::upload(site).await?);
-    }
 
-    Ok(())
-}
-
-pub fn version() -> &'static str {
-    if std::env::args().any(|e| e == "--test") {
-        env!("CARGO_PKG_VERSION")
-    } else {
-        match option_env!("GITHUB_SHA") {
-            Some(sha) => {
-                Box::leak(format!("{} [{}]", env!("CARGO_PKG_VERSION"), sha).into_boxed_str())
-            }
-            None => env!("CARGO_PKG_VERSION"),
+        if let Err(e) = clift::commands::upload(site).await {
+            eprintln!("Upload failed: {e}");
+            std::process::exit(1);
         }
     }
 }
-
-pub(crate) const API_FIFTHTRY_COM: &str = "https://api.fifthtry.com";

@@ -30,3 +30,13 @@ source <(curl -fsSL https://www.fifthtry.com/clift.sh)
 ```
 
 Supported Platforms: Linux, Mac
+
+## Debug
+
+To run in debug mode
+
+```sh
+export ACTIONS_ID_TOKEN_REQUEST_URL="url"
+export ACTIONS_ID_TOKEN_REQUEST_TOKEN="token"
+export DEBUG_USE_TEJAR_FOLDER="${PROJ_ROOT}/debug-tejar-content"
+```
