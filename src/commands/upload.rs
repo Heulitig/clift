@@ -27,9 +27,10 @@ async fn upload_(
     data: &clift::api::InitiateUploadResponse,
     current_dir: &std::path::Path,
 ) -> Result<(), UploadError> {
-    let mut uploader = match std::env::var("DEBUG_UPLOAD") {
+    let mut uploader = match std::env::var("DEBUG_USE_TEJAR_FOLDER") {
         Ok(path) => {
             let path = std::path::PathBuf::from(path).join(format!("{}.tejar", data.tejar_file_id));
+            println!("DEBUG_USE_TEJAR_FOLDER: {path:?}");
             clift::utils::Uploader::debug(&path).await?
         }
         Err(_) => clift::utils::Uploader::s3(data.pre_signed_request.clone()),
