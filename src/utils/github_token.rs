@@ -1,4 +1,4 @@
-pub struct GithubActionIdTokenRequest {
+pub struct GithubOidcActionToken {
     pub token: String,
     pub url: String,
 }
@@ -11,12 +11,12 @@ pub enum GithubActionIdTokenRequestError {
     UrlMissing(std::env::VarError),
 }
 
-pub fn github_action_id_token_request(
-) -> Result<GithubActionIdTokenRequest, GithubActionIdTokenRequestError> {
+pub fn github_oidc_action_token() -> Result<GithubOidcActionToken, GithubActionIdTokenRequestError>
+{
     let token = std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
         .map_err(GithubActionIdTokenRequestError::TokenMissing)?;
     let url = std::env::var("ACTIONS_ID_TOKEN_REQUEST_URL")
         .map_err(GithubActionIdTokenRequestError::UrlMissing)?;
 
-    Ok(GithubActionIdTokenRequest { token, url })
+    Ok(GithubOidcActionToken { token, url })
 }

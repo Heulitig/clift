@@ -18,7 +18,7 @@ pub enum CommitUploadError {
 pub async fn commit_upload(
     site: &str,
     data: &clift::api::InitiateUploadResponse,
-    github_action_id_token_request: &clift::utils::GithubActionIdTokenRequest,
+    update_token: &clift::utils::UpdateToken,
 ) -> Result<(), CommitUploadError> {
     let response = clift::utils::call_api(
         reqwest::Client::new()
@@ -28,7 +28,7 @@ pub async fn commit_upload(
                 upload_session_id: data.upload_session_id,
                 tejar_file_id: data.tejar_file_id,
             }),
-        github_action_id_token_request,
+        update_token,
     )
     .await?;
 

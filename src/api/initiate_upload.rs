@@ -50,7 +50,7 @@ pub enum InitiateUploadError {
 pub async fn initiate_upload(
     site: &str,
     current_dir: &std::path::Path,
-    github_action_id_token_request: &clift::utils::GithubActionIdTokenRequest,
+    update_token: &clift::utils::UpdateToken,
 ) -> Result<InitiateUploadResponse, InitiateUploadError> {
     let content_to_upload = clift::utils::get_local_files(current_dir).await?;
 
@@ -61,7 +61,7 @@ pub async fn initiate_upload(
                 site: site.to_string(),
                 files: content_to_upload,
             }),
-        github_action_id_token_request,
+        update_token,
     )
     .await
     .map_err(InitiateUploadError::CantCallAPI)?;

@@ -6,18 +6,16 @@ pub async fn upload(site: Option<&String>) -> Result<(), UploadError> {
         None => clift::utils::get_site_name_from_ftd(&current_dir).await?,
     };
 
-    let github_action_id_token_request = clift::utils::github_action_id_token_request()?;
+    let update_token = clift::utils::get_update_token()?;
 
     println!("Initialing Upload....");
-    let data =
-        clift::api::initiate_upload(site.as_str(), &current_dir, &github_action_id_token_request)
-            .await?;
+    let data = clift::api::initiate_upload(site.as_str(), &current_dir, &update_token).await?;
 
     upload_(&data, &current_dir).await?;
 
     println!("Committing Upload...");
 
-    clift::api::commit_upload(site.as_str(), &data, &github_action_id_token_request).await?;
+    clift::api::commit_upload(site.as_str(), &data, &update_token).await?;
 
     println!("Upload Done");
     Ok(())
@@ -76,8 +74,8 @@ pub enum UploadError {
     #[error("CantGetSiteNameFromFtd")]
     CantGetSiteNameFromFtd(#[from] clift::utils::GetSiteNameFromFtdError),
 
-    #[error("Cant Read Github Tokens: {0}")]
-    CantReadGithubTokens(#[from] clift::utils::GithubActionIdTokenRequestError),
+    #[error("Cant Read Tokens: {0}")]
+    CantReadTokens(#[from] clift::utils::UpdateTokenError),
 
     #[error("CantInitiateUpload: {0}")]
     CantInitiateUpload(#[from] clift::api::InitiateUploadError),
