@@ -6,7 +6,7 @@ pub async fn upload(site: Option<&String>) -> Result<(), UploadError> {
         None => clift::utils::get_site_name_from_ftd(&current_dir).await?,
     };
 
-    let update_token = clift::utils::get_update_token()?;
+    let update_token = clift::utils::update_token()?;
 
     println!("Initialing Upload....");
     let data = clift::api::initiate_upload(site.as_str(), &current_dir, &update_token).await?;
