@@ -8,16 +8,16 @@ struct InitiateUploadRequest {
     files: Vec<ContentToUpload>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 pub struct InitiateUploadResponse {
     pub new_files: Vec<String>,
     pub updated_files: Vec<String>,
     pub upload_session_id: i64,
-    pub tejar_file_id: i64,
-    pub pre_signed_request: PreSignedRequest,
+    pub tejar_file_id: Option<i64>,
+    pub pre_signed_request: Option<PreSignedRequest>,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(serde::Deserialize, Clone, Debug)]
 pub struct PreSignedRequest {
     pub url: String,
     pub method: String,

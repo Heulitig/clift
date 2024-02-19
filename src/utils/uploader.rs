@@ -8,7 +8,9 @@ pub enum UploaderError {
     #[error("io error {0}")]
     IOError(#[from] std::io::Error),
     #[error("reqwest error {0}")]
-    S3(#[from] reqwest::Error),
+    S3PutRequestSendError(#[from] reqwest::Error),
+    #[error("reqwest error {0}")]
+    S3PutError(reqwest::StatusCode, String),
 }
 
 impl Uploader {
@@ -43,7 +45,17 @@ impl Uploader {
                 request = request.header(k, v);
             }
 
-            request.body(v.clone()).send().await?;
+            let resp = request.body(v.clone()).send().await?;
+            let status_code = resp.status();
+            let body = resp.text().await?;
+
+            if status_code.is_success() {
+                println!("upload done: {}", status_code);
+            } else {
+                println!("upload failed: {}", status_code);
+                println!("body: {}", body.as_str());
+                return Err(UploaderError::S3PutError(status_code, body));
+            }
         }
 
         Ok(())

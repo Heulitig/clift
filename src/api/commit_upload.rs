@@ -6,7 +6,7 @@ fn endpoint() -> String {
 pub struct CommitUploadRequest {
     site: String,
     upload_session_id: i64,
-    tejar_file_id: i64,
+    tejar_file_id: Option<i64>,
 }
 
 #[derive(Debug, thiserror::Error)]

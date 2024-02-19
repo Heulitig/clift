@@ -10,8 +10,15 @@ pub async fn upload(site: Option<&String>) -> Result<(), UploadError> {
 
     println!("Initialing Upload....");
     let data = clift::api::initiate_upload(site.as_str(), &current_dir, &update_token).await?;
+    dbg!(&data);
 
-    upload_(&data, &current_dir).await?;
+    if let (Some(pre_signed_request), Some(tejar_file_id)) =
+        (data.pre_signed_request.clone(), data.tejar_file_id)
+    {
+        upload_(&data, pre_signed_request, tejar_file_id, &current_dir).await?;
+    } else {
+        println!("Nothing to upload!");
+    }
 
     println!("Committing Upload...");
 
@@ -23,15 +30,20 @@ pub async fn upload(site: Option<&String>) -> Result<(), UploadError> {
 
 async fn upload_(
     data: &clift::api::InitiateUploadResponse,
+    pre_signed_request: clift::api::PreSignedRequest,
+    tejar_file_id: i64,
     current_dir: &std::path::Path,
 ) -> Result<(), UploadError> {
     let mut uploader = match std::env::var("DEBUG_USE_TEJAR_FOLDER") {
         Ok(path) => {
-            let path = std::path::PathBuf::from(path).join(format!("{}.tejar", data.tejar_file_id));
+            let path = std::path::PathBuf::from(path).join(format!("{}.tejar", tejar_file_id));
             println!("DEBUG_USE_TEJAR_FOLDER: {path:?}");
             clift::utils::Uploader::debug(&path).await?
         }
-        Err(_) => clift::utils::Uploader::s3(data.pre_signed_request.clone()),
+        Err(_) => {
+            println!("using s3");
+            clift::utils::Uploader::s3(pre_signed_request)
+        }
     };
 
     upload_files(
