@@ -20,12 +20,12 @@ InstallDir $PROGRAMFILES64\clift
 
 ; Styling
 !define MUI_BRANDINGTEXT "clift ${VERSION}"
-!define MUI_ICON "clift.ico"
+;!define MUI_ICON "clift.ico"
 !define MUI_INSTFILESPAGE_COLORS "FFFFFF 000000"
 !define MUI_BGCOLOR 000000
 !define MUI_TEXTCOLOR ffffff
 !define MUI_FINISHPAGE_NOAUTOCLOSE
-!define MUI_FINISHPAGE_SHOWREADME "https://clift.com"
+;!define MUI_FINISHPAGE_SHOWREADME "https://clift.com"
 CRCCheck On
 
 ; Request application privileges for installation
