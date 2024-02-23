@@ -25,9 +25,9 @@ jobs:
         uses: gmiam/rust-musl-action@0f17df9aea6eadc5eaeccdf733ec78c203103b61
         with:
           args: cargo build --target x86_64-unknown-linux-musl --release
-      - name: run clift
+      - name: run clift (linux)
         run: ./target/x86_64-unknown-linux-musl/release/clift --version
-      - name: Rename assets
+      - name: Rename assets (linux)
         run: |
           cp ./target/x86_64-unknown-linux-musl/release/clift ./clift_linux_musl_x86_64
       - name: Update .github/RELEASE_TEMPLATE.md
@@ -37,6 +37,30 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "./clift_linux_musl_x86_64"
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.inputs.releaseTag }}
+          bodyFile: .github/RELEASE_TEMPLATE.md
+  release-macos:
+    name: Build for MacOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+      - name: Run Build
+        continue-on-error: false
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+      - name: run clift (macos)
+        run: ./target/release/clift --version
+      - name: Rename assets (macos)
+        run: |
+          cp ./target/release/clift ./clift_macos_x64_latest
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./clift_macos_x64_latest"
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.event.inputs.releaseTag }}
