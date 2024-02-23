@@ -10,6 +10,35 @@ on:
         type: boolean
         description: Mark release as production ready
 jobs:
+  release-windows:
+    name: Build for Windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v9
+      - uses: DeterminateSystems/magic-nix-cache-action@v3
+      - name: build mingwW64
+        run: nix build -L .#clift-win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows_x64_latest
+          path: result/bin/clift.exe
+      - name: Install NSIS & Plugins
+        run: |
+          sudo apt update && sudo apt install -y nsis nsis-pluginapi
+          sudo chown -R $(whoami) /usr/share/nsis/Plugins/
+
+          wget https://github.com/GsNSIS/EnVar/releases/download/v0.3.1/EnVar-Plugin.zip
+          unzip EnVar-Plugin.zip -d EnVar-Plugin
+          sudo mv EnVar-Plugin/Plugins/amd64-unicode/* /usr/share/nsis/Plugins/amd64-unicode/
+          sudo mv EnVar-Plugin/Plugins/x86-ansi/* /usr/share/nsis/Plugins/x86-ansi/
+          sudo mv EnVar-Plugin/Plugins/x86-unicode/* /usr/share/nsis/Plugins/x86-unicode/
+      - name: Create Installer
+        run: makensis -V3 -DCURRENT_WD=${{ github.workspace }} -DVERSION=${{ github.event.inputs.releaseTag }} install.nsi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows_x64_installer.exe
+          path: windows_x64_installer.exe
   release-ubuntu:
     name: Build for Linux
     runs-on: ubuntu-latest
@@ -67,8 +96,18 @@ jobs:
         with:
           name: linux_musl_x86_64
           path: ~/download/linux_musl
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows_x64_latest
+          path: ~/download/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows_x64_installer.exe
+          path: ~/download/windows
       - name: Rename assets
         run: |
+          mv ~/download/windows/clift.exe ~/download/windows/clift_windows_x86_64.exe
+          mv ~/download/windows/windows_x64_installer.exe ~/download/windows/clift_setup.exe
           mv ~/download/macos/clift ~/download/macos/clift_macos_x86_64
           mv ~/download/linux_musl/clift ~/download/linux_musl/clift_linux_musl_x86_64
       - name: Update .github/RELEASE_TEMPLATE.md
@@ -77,7 +116,7 @@ jobs:
           sed -i "s/DATE/$(date)/g" .github/RELEASE_TEMPLATE.md
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "~/download/macos/clift_macos_x86_64,~/download/linux_musl/clift_linux_musl_x86_64"
+          artifacts: "~/download/windows/clift_windows_x86_64.exe,~/download/windows/clift_setup.exe,~/download/macos/clift_macos_x86_64,~/download/linux_musl/clift_linux_musl_x86_64"
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.event.inputs.releaseTag }}
